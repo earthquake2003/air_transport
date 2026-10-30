@@ -69,7 +69,7 @@ $rows = $stmt->fetchAll();
     <?php endif; ?>
   </form>
 
-  <div class="card-body air-table-wrap">
+  <div class="card-body air-table-wrap mt-3">
     <div class="table-responsive">
       <table id="airEvacTable" class="table mb-0 align-middle w-100">
         <thead>
@@ -90,15 +90,15 @@ $rows = $stmt->fetchAll();
               tabindex="0" role="link"
               aria-label="<?= e('ดูรายละเอียดผู้ป่วย HN ' . $r['hn']) ?>"
               <?php endif; ?>>
-            <td data-order="<?= e($r['date']) ?>"><?= e($thai) ?></td>
-            <td class="patient-hn"><?= e($r['hn']) ?></td>
+            <td class="date-cell" data-order="<?= e($r['date']) ?>"><?= e($thai) ?></td>
+            <td class="patient-hn"><span><?= e($r['hn']) ?></span></td>
             <td class=""><?= e($r['an'] ?? '-') ?></td>
             <td><?= e($r['rank_code'] ?? '-') ?></td>
-            <td><?= e($r['first_name'] . ' ' . $r['last_name']) ?></td>
+            <td class="patient-name"><?= e($r['first_name'] . ' ' . $r['last_name']) ?></td>
             <td><?= e($r['unit'] ?? '-') ?></td>
-            <td><?= e($MISSIONS[$r['mission_type']] ?? '-') ?>
-                <?php if ($r['mission_name']): ?><br><small class="text-muted"><?= e($r['mission_name']) ?></small><?php endif; ?></td>
-            <td class="route-cell"><?= e($r['origin']) ?><span class="route-arrow">&rarr;</span><?= e($r['destination']) ?></td>
+            <td class="mission-cell"><?= e($MISSIONS[$r['mission_type']] ?? '-') ?>
+                <?php if ($r['mission_name']): ?><small><?= e($r['mission_name']) ?></small><?php endif; ?></td>
+            <td class="route-cell"><span><?= e($r['origin']) ?></span><i class="route-arrow bi bi-arrow-right" aria-hidden="true"></i><span><?= e($r['destination']) ?></span></td>
             <td class="diagnosis-cell"><?= e($r['diagnosis']) ?></td>
             <td><?= e($AIRCRAFTS[$r['aircraft_type']] ?? '-') ?></td>
             <td><?= e($REMARKS[$r['remark_type']] ?? '-') ?></td>

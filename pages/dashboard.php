@@ -2,6 +2,33 @@
 $today = date('Y-m-d');
 $monthStart = date('Y-m-01');
 $nextMonth = date('Y-m-01', strtotime('first day of next month'));
+$defaultTrendStart = date('Y-m-01', strtotime('-11 months', strtotime($monthStart)));
+$trendStart = $defaultTrendStart;
+$trendEndDate = $today;
+$chartDateError = '';
+
+$requestedStart = $_GET['start_date'] ?? null;
+$requestedEnd = $_GET['end_date'] ?? null;
+$validDate = static function ($value) {
+    if (!is_string($value) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+        return false;
+    }
+
+    [$year, $month, $day] = array_map('intval', explode('-', $value));
+    return checkdate($month, $day, $year);
+};
+
+if ($requestedStart !== null || $requestedEnd !== null) {
+    if (!$validDate($requestedStart) || !$validDate($requestedEnd)) {
+        $chartDateError = 'กรุณาระบุวันที่เริ่มต้นและวันที่สิ้นสุดให้ถูกต้อง';
+    } elseif ($requestedStart > $requestedEnd) {
+        $chartDateError = 'วันที่เริ่มต้นต้องไม่อยู่หลังวันที่สิ้นสุด';
+    } else {
+        $trendStart = $requestedStart;
+        $trendEndDate = $requestedEnd;
+    }
+}
+$trendEndExclusive = (new DateTimeImmutable($trendEndDate))->modify('+1 day')->format('Y-m-d');
 
 $totalRecords = (int)$pdo->query('SELECT COUNT(*) FROM air_patients')->fetchColumn();
 $monthStmt = $pdo->prepare('SELECT COUNT(*) FROM air_patients WHERE `date` >= :month_start AND `date` < :next_month');
@@ -14,45 +41,68 @@ $todayStmt = $pdo->prepare('SELECT COUNT(*) FROM air_patients WHERE `date` = :to
 $todayStmt->execute([':today' => $today]);
 $todayRecords = (int)$todayStmt->fetchColumn();
 
-$aircraftCounts = array_fill_keys(array_keys($AIRCRAFTS), 0);
-$aircraftStmt = $pdo->query(
-    'SELECT aircraft_type, COUNT(*) AS record_count
+$trendStmt = $pdo->prepare(
+    "SELECT DATE_FORMAT(`date`, '%Y-%m') AS month_key, aircraft_type, remark_type, COUNT(*) AS record_count
      FROM air_patients
-     GROUP BY aircraft_type'
+     WHERE `date` >= :trend_start AND `date` < :trend_end
+     GROUP BY month_key, aircraft_type, remark_type"
 );
-foreach ($aircraftStmt->fetchAll() as $row) {
+$trendStmt->execute([
+    ':trend_start' => $trendStart,
+    ':trend_end' => $trendEndExclusive,
+]);
+$trendCounts = [];
+$aircraftMonthlyCounts = [];
+$remarkMonthlyCounts = [];
+foreach ($trendStmt->fetchAll() as $row) {
+    $monthKey = $row['month_key'];
+    $recordCount = (int)$row['record_count'];
     $aircraftType = (int)$row['aircraft_type'];
-    if (array_key_exists($aircraftType, $aircraftCounts)) {
-        $aircraftCounts[$aircraftType] = (int)$row['record_count'];
-    } else {
-        $AIRCRAFTS[$aircraftType] = 'อื่น ๆ';
-        $aircraftCounts[$aircraftType] = (int)$row['record_count'];
-    }
-}
-
-$remarkCounts = array_fill_keys(array_keys($REMARKS), 0);
-$remarkStmt = $pdo->query(
-    'SELECT remark_type, COUNT(*) AS record_count
-     FROM air_patients
-     GROUP BY remark_type'
-);
-foreach ($remarkStmt->fetchAll() as $row) {
     $remarkType = (int)$row['remark_type'];
-    if (array_key_exists($remarkType, $remarkCounts)) {
-        $remarkCounts[$remarkType] = (int)$row['record_count'];
-    } else {
-        $REMARKS[$remarkType] = 'อื่น ๆ';
-        $remarkCounts[$remarkType] = (int)$row['record_count'];
-    }
+
+    $trendCounts[$monthKey] = ($trendCounts[$monthKey] ?? 0) + $recordCount;
+    $AIRCRAFTS[$aircraftType] = $AIRCRAFTS[$aircraftType] ?? 'อื่น ๆ';
+    $REMARKS[$remarkType] = $REMARKS[$remarkType] ?? 'อื่น ๆ';
+    $aircraftMonthlyCounts[$monthKey][$aircraftType] = ($aircraftMonthlyCounts[$monthKey][$aircraftType] ?? 0) + $recordCount;
+    $remarkMonthlyCounts[$monthKey][$remarkType] = ($remarkMonthlyCounts[$monthKey][$remarkType] ?? 0) + $recordCount;
 }
 
-$aircraftChart = [
-    'labels' => array_values($AIRCRAFTS),
-    'values' => array_values($aircraftCounts),
-];
-$remarkChart = [
-    'labels' => array_values($REMARKS),
-    'values' => array_values($remarkCounts),
+$thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+$trendLabels = [];
+$trendValues = [];
+$trendMonthKeys = [];
+$trendMonth = (new DateTimeImmutable($trendStart))->modify('first day of this month');
+$trendLastMonth = new DateTimeImmutable($trendEndDate);
+$trendLastMonth = $trendLastMonth->modify('first day of this month');
+while ($trendMonth <= $trendLastMonth) {
+    $monthKey = $trendMonth->format('Y-m');
+    $trendMonthKeys[] = $monthKey;
+    $trendLabels[] = $thaiMonths[(int)$trendMonth->format('n') - 1] . ' ' . ((int)$trendMonth->format('Y') + 543);
+    $trendValues[] = $trendCounts[$monthKey] ?? 0;
+    $trendMonth = $trendMonth->modify('+1 month');
+}
+
+$aircraftChart = ['labels' => array_values($AIRCRAFTS), 'values' => []];
+foreach (array_keys($AIRCRAFTS) as $aircraftType) {
+    $monthlyCounts = array_map(
+        static fn($monthKey) => $aircraftMonthlyCounts[$monthKey][$aircraftType] ?? 0,
+        $trendMonthKeys
+    );
+    $aircraftChart['values'][] = array_sum($monthlyCounts);
+}
+
+$remarkChart = ['labels' => array_values($REMARKS), 'values' => []];
+foreach (array_keys($REMARKS) as $remarkType) {
+    $monthlyCounts = array_map(
+        static fn($monthKey) => $remarkMonthlyCounts[$monthKey][$remarkType] ?? 0,
+        $trendMonthKeys
+    );
+    $remarkChart['values'][] = array_sum($monthlyCounts);
+}
+
+$trendChart = [
+    'labels' => $trendLabels,
+    'values' => $trendValues,
 ];
 
 $recentStmt = $pdo->query(
@@ -106,13 +156,42 @@ $formatThaiDate = static function ($value) {
   </div>
 </div>
 
+<form method="get" action="index.php" class="admin-chart-date-filter mb-4">
+  <input type="hidden" name="page" value="admin_dashboard">
+  <div class="row g-3 align-items-end">
+    <div class="col-lg-3 col-md-6">
+      <label for="chartStartDate" class="form-label"><i class="bi bi-calendar3 me-2" aria-hidden="true"></i>วันที่เริ่มต้น</label>
+      <input id="chartStartDate" type="date" name="start_date" class="form-control"
+             value="<?= e($trendStart) ?>" required>
+    </div>
+    <div class="col-lg-3 col-md-6">
+      <label for="chartEndDate" class="form-label"><i class="bi bi-calendar3 me-2" aria-hidden="true"></i>วันที่สิ้นสุด</label>
+      <input id="chartEndDate" type="date" name="end_date" class="form-control"
+             value="<?= e($trendEndDate) ?>" required>
+    </div>
+    <div class="col-lg-3 col-md-6">
+      <button type="submit" class="btn btn-chart-filter w-100">
+        <i class="bi bi-funnel-fill me-2" aria-hidden="true"></i>ประมวลผล
+      </button>
+    </div>
+    <div class="col-lg-3 col-md-6">
+      <a href="index.php?page=admin_dashboard" class="btn btn-chart-reset w-100">
+        <i class="bi bi-arrow-counterclockwise me-2" aria-hidden="true"></i>ล้างค่า
+      </a>
+    </div>
+  </div>
+  <?php if ($chartDateError !== ''): ?>
+    <div class="alert alert-danger py-2 mt-3 mb-0" role="alert"><?= e($chartDateError) ?></div>
+  <?php endif; ?>
+</form>
+
 <div class="row g-3 mb-4">
   <div class="col-xl-7">
     <section class="admin-panel admin-chart-panel">
       <div class="admin-panel-heading">
         <div>
           <h2><i class="bi bi-airplane-engines me-2 text-info" aria-hidden="true"></i>จำนวนการใช้อากาศยาน</h2>
-          <p>สรุปจำนวนรายการแยกตามชนิดอากาศยาน</p>
+          <p>จำนวนการใช้อากาศยานตามช่วงเวลาที่เลือก</p>
         </div>
         <span class="admin-chart-badge"><i class="bi bi-bar-chart-fill me-1" aria-hidden="true"></i>แท่ง</span>
       </div>
@@ -126,12 +205,28 @@ $formatThaiDate = static function ($value) {
       <div class="admin-panel-heading">
         <div>
           <h2><i class="bi bi-pie-chart-fill me-2 text-info" aria-hidden="true"></i>สัดส่วนหมายเหตุ</h2>
-          <p>สรุปประเภทหมายเหตุที่บันทึก</p>
+          <p>สัดส่วนหมายเหตุตามช่วงเวลาที่เลือก</p>
         </div>
         <span class="admin-chart-badge"><i class="bi bi-pie-chart me-1" aria-hidden="true"></i>โดนัท</span>
       </div>
       <div class="admin-chart-body admin-doughnut-body">
         <canvas id="remarkChart" role="img" aria-label="กราฟโดนัทสัดส่วนประเภทหมายเหตุ"></canvas>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <section class="admin-panel admin-chart-panel">
+      <div class="admin-panel-heading">
+        <div>
+          <h2><i class="bi bi-graph-up-arrow me-2 text-info" aria-hidden="true"></i>แนวโน้มการลำเลียงรายเดือน</h2>
+          <p>จำนวนรายการลำเลียงรายเดือน แสดงเดือนที่ไม่มีรายการเป็นศูนย์</p>
+        </div>
+      </div>
+      <div class="admin-chart-body admin-trend-chart-body">
+        <canvas id="trendChart" role="img" aria-label="กราฟแนวโน้มจำนวนผู้ป่วยลำเลียงรายเดือน"></canvas>
       </div>
     </section>
   </div>
@@ -176,13 +271,58 @@ $formatThaiDate = static function ($value) {
 <script>
   const aircraftData = <?= json_encode($aircraftChart, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
   const remarkData = <?= json_encode($remarkChart, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+  const trendData = <?= json_encode($trendChart, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
   const chartPalette = ['#0e7490', '#4f46e5', '#16a36a', '#f59e0b', '#e05b75', '#64748b'];
 
   if (window.Chart) {
     Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
     Chart.defaults.color = '#71818b';
 
-    new Chart(document.getElementById('aircraftChart'), {
+    const trendChart = new Chart(document.getElementById('trendChart'), {
+      type: 'line',
+      data: {
+        labels: trendData.labels,
+        datasets: [{
+          label: 'จำนวนรายการ',
+          data: trendData.values,
+          borderColor: '#0e7490',
+          backgroundColor: 'rgba(14, 116, 144, .12)',
+          pointBackgroundColor: '#fff',
+          pointBorderColor: '#0e7490',
+          pointBorderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          borderWidth: 3,
+          fill: true,
+          tension: .35
+        }]
+      },
+      options: {
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            displayColors: false,
+            callbacks: { label: (context) => ` ${context.parsed.y.toLocaleString('th-TH')} รายการ` }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            border: { display: false }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { precision: 0 },
+            grid: { color: '#edf2f5' },
+            border: { display: false }
+          }
+        }
+      }
+    });
+
+    const aircraftChart = new Chart(document.getElementById('aircraftChart'), {
       type: 'bar',
       data: {
         labels: aircraftData.labels,
@@ -219,7 +359,7 @@ $formatThaiDate = static function ($value) {
       }
     });
 
-    new Chart(document.getElementById('remarkChart'), {
+    const remarkChart = new Chart(document.getElementById('remarkChart'), {
       type: 'doughnut',
       data: {
         labels: remarkData.labels,

@@ -326,6 +326,68 @@
   padding: 1.25rem 1.25rem 1.5rem;
 }
 
+.admin-chart-date-filter {
+  padding: 1rem;
+  border: 1px solid #e2e8ef;
+  border-radius: .9rem;
+  background: #fff;
+  box-shadow: 0 .35rem 1rem rgba(30, 55, 70, .04);
+}
+
+.admin-chart-date-filter .form-label {
+  margin-bottom: .45rem;
+  color: #253f4d;
+  font-size: .88rem;
+  font-weight: 600;
+}
+
+.admin-chart-date-filter .form-label i { color: #647d8b; }
+
+.admin-chart-date-filter .form-control {
+  min-height: 56px;
+  padding: .7rem .9rem;
+  border: 1px solid #dfe5ec;
+  border-radius: .8rem;
+  background-color: #f0f2f5;
+  color: #273e4c;
+  font-size: 1rem;
+}
+
+.admin-chart-date-filter .form-control:focus {
+  border-color: #5a4bd6;
+  background-color: #fff;
+  box-shadow: 0 0 0 .2rem rgba(67, 56, 202, .12);
+}
+
+.admin-chart-date-filter .btn {
+  min-height: 56px;
+  border-radius: .8rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.btn-chart-filter {
+  border: 0;
+  background: #4338ca;
+  color: #fff;
+  box-shadow: 0 .25rem .55rem rgba(67, 56, 202, .16);
+}
+
+.btn-chart-filter:hover,
+.btn-chart-filter:focus { background: #3730a3; color: #fff; }
+
+.btn-chart-reset {
+  border: 1px solid #dfe5ec;
+  background: #f8f9fa;
+  color: #667789;
+  box-shadow: 0 .2rem .4rem rgba(30, 55, 70, .07);
+}
+
+.btn-chart-reset:hover,
+.btn-chart-reset:focus { border-color: #cbd5df; background: #eef1f4; color: #405565; }
+
+.admin-trend-chart-body { height: 330px; }
+
 .admin-doughnut-body { height: 300px; }
 
 .patient-summary-card {
@@ -692,6 +754,9 @@
 }
 
 @media (max-width: 767.98px) {
+  .admin-chart-date-filter .form-control,
+  .admin-chart-date-filter .btn { min-height: 48px; }
+  .admin-trend-chart-body { height: 280px; }
   .patient-summary-header { align-items: flex-start; flex-wrap: wrap; padding: 1.25rem; }
   .patient-summary-avatar { width: 3.75rem; height: 3.75rem; font-size: 1.6rem; }
   .patient-summary-title { flex: 1 1 calc(100% - 5rem); }
@@ -738,6 +803,7 @@
   .admin-stat-card { padding: 1rem; }
   .admin-recent-table { min-width: 620px; }
   .admin-chart-body { height: 270px; padding: 1rem; }
+  .admin-trend-chart-body { height: 250px; }
   .admin-login { padding: .75rem; }
   .login-shell { border-radius: 1rem; }
 }
