@@ -58,7 +58,7 @@ try {
     $pdo->prepare($sql)->execute($data);
 
     $_SESSION['flash'] = ['type' => 'success', 'msg' => 'บันทึกข้อมูลสำเร็จ'];
-    header('Location: index.php?page=air_evac_list');
+    header('Location: index.php?page=' . (admin_logged_in() ? 'air_evac_list' : 'air_evac_form'));
 } catch (PDOException $e) {
     error_log('Air evacuation patient save failed: ' . $e->getMessage());
     $_SESSION['old']   = array_filter($_POST, 'is_string');

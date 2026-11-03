@@ -2,33 +2,25 @@
 $today = date('Y-m-d');
 $monthStart = date('Y-m-01');
 $nextMonth = date('Y-m-01', strtotime('first day of next month'));
-$defaultTrendStart = date('Y-m-01', strtotime('-11 months', strtotime($monthStart)));
-$trendStart = $defaultTrendStart;
-$trendEndDate = $today;
-$chartDateError = '';
-
-$requestedStart = $_GET['start_date'] ?? null;
-$requestedEnd = $_GET['end_date'] ?? null;
-$validDate = static function ($value) {
-    if (!is_string($value) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
-        return false;
-    }
-
-    [$year, $month, $day] = array_map('intval', explode('-', $value));
-    return checkdate($month, $day, $year);
-};
-
-if ($requestedStart !== null || $requestedEnd !== null) {
-    if (!$validDate($requestedStart) || !$validDate($requestedEnd)) {
-        $chartDateError = 'กรุณาระบุวันที่เริ่มต้นและวันที่สิ้นสุดให้ถูกต้อง';
-    } elseif ($requestedStart > $requestedEnd) {
-        $chartDateError = 'วันที่เริ่มต้นต้องไม่อยู่หลังวันที่สิ้นสุด';
-    } else {
-        $trendStart = $requestedStart;
-        $trendEndDate = $requestedEnd;
-    }
+$currentYear = (int)date('Y');
+$selectedYear = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
+$selectedYear = $selectedYear !== false && $selectedYear !== null
+    && $selectedYear >= 2000 && $selectedYear <= $currentYear + 1
+    ? $selectedYear
+    : $currentYear;
+$requestedMonth = $_GET['month'] ?? (int)date('n');
+$selectedMonth = $requestedMonth === 'year' ? null : filter_var($requestedMonth, FILTER_VALIDATE_INT);
+if ($requestedMonth !== 'year' && ($selectedMonth === false || $selectedMonth === null || $selectedMonth < 1 || $selectedMonth > 12)) {
+    $selectedMonth = (int)date('n');
 }
-$trendEndExclusive = (new DateTimeImmutable($trendEndDate))->modify('+1 day')->format('Y-m-d');
+$trendStart = $selectedMonth === null
+    ? sprintf('%04d-01-01', $selectedYear)
+    : sprintf('%04d-%02d-01', $selectedYear, $selectedMonth);
+$trendEndExclusive = (new DateTimeImmutable($trendStart))
+    ->modify($selectedMonth === null ? '+1 year' : '+1 month')
+    ->format('Y-m-d');
+$minYear = (int)$pdo->query('SELECT MIN(YEAR(`date`)) FROM air_patients')->fetchColumn();
+$firstYear = $minYear > 0 ? min($minYear, $currentYear) : $currentYear;
 
 $totalRecords = (int)$pdo->query('SELECT COUNT(*) FROM air_patients')->fetchColumn();
 $monthStmt = $pdo->prepare('SELECT COUNT(*) FROM air_patients WHERE `date` >= :month_start AND `date` < :next_month');
@@ -42,10 +34,11 @@ $todayStmt->execute([':today' => $today]);
 $todayRecords = (int)$todayStmt->fetchColumn();
 
 $trendStmt = $pdo->prepare(
-    "SELECT DATE_FORMAT(`date`, '%Y-%m') AS month_key, aircraft_type, remark_type, COUNT(*) AS record_count
+    "SELECT DATE_FORMAT(`date`, '" . ($selectedMonth === null ? '%Y-%m' : '%Y-%m-%d') . "') AS period_key,
+            DATE_FORMAT(`date`, '%Y-%m') AS month_key, aircraft_type, remark_type, COUNT(*) AS record_count
      FROM air_patients
      WHERE `date` >= :trend_start AND `date` < :trend_end
-     GROUP BY month_key, aircraft_type, remark_type"
+     GROUP BY period_key, month_key, aircraft_type, remark_type"
 );
 $trendStmt->execute([
     ':trend_start' => $trendStart,
@@ -54,13 +47,16 @@ $trendStmt->execute([
 $trendCounts = [];
 $aircraftMonthlyCounts = [];
 $remarkMonthlyCounts = [];
+$trendPeriodCounts = [];
 foreach ($trendStmt->fetchAll() as $row) {
     $monthKey = $row['month_key'];
+    $periodKey = $row['period_key'];
     $recordCount = (int)$row['record_count'];
     $aircraftType = (int)$row['aircraft_type'];
     $remarkType = (int)$row['remark_type'];
 
     $trendCounts[$monthKey] = ($trendCounts[$monthKey] ?? 0) + $recordCount;
+    $trendPeriodCounts[$periodKey] = ($trendPeriodCounts[$periodKey] ?? 0) + $recordCount;
     $AIRCRAFTS[$aircraftType] = $AIRCRAFTS[$aircraftType] ?? 'อื่น ๆ';
     $REMARKS[$remarkType] = $REMARKS[$remarkType] ?? 'อื่น ๆ';
     $aircraftMonthlyCounts[$monthKey][$aircraftType] = ($aircraftMonthlyCounts[$monthKey][$aircraftType] ?? 0) + $recordCount;
@@ -71,15 +67,23 @@ $thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.',
 $trendLabels = [];
 $trendValues = [];
 $trendMonthKeys = [];
-$trendMonth = (new DateTimeImmutable($trendStart))->modify('first day of this month');
-$trendLastMonth = new DateTimeImmutable($trendEndDate);
-$trendLastMonth = $trendLastMonth->modify('first day of this month');
-while ($trendMonth <= $trendLastMonth) {
-    $monthKey = $trendMonth->format('Y-m');
-    $trendMonthKeys[] = $monthKey;
-    $trendLabels[] = $thaiMonths[(int)$trendMonth->format('n') - 1] . ' ' . ((int)$trendMonth->format('Y') + 543);
-    $trendValues[] = $trendCounts[$monthKey] ?? 0;
-    $trendMonth = $trendMonth->modify('+1 month');
+if ($selectedMonth === null) {
+    $trendMonth = new DateTimeImmutable($trendStart);
+    for ($monthIndex = 0; $monthIndex < 12; $monthIndex++) {
+        $monthKey = $trendMonth->format('Y-m');
+        $trendMonthKeys[] = $monthKey;
+        $trendLabels[] = $thaiMonths[(int)$trendMonth->format('n') - 1] . ' ' . ((int)$trendMonth->format('Y') + 543);
+        $trendValues[] = $trendCounts[$monthKey] ?? 0;
+        $trendMonth = $trendMonth->modify('+1 month');
+    }
+} else {
+    $daysInMonth = (int)(new DateTimeImmutable($trendStart))->format('t');
+    $trendMonthKeys[] = substr($trendStart, 0, 7);
+    for ($day = 1; $day <= $daysInMonth; $day++) {
+        $periodKey = sprintf('%04d-%02d-%02d', $selectedYear, $selectedMonth, $day);
+        $trendLabels[] = (string)$day;
+        $trendValues[] = $trendPeriodCounts[$periodKey] ?? 0;
+    }
 }
 
 $aircraftChart = ['labels' => array_values($AIRCRAFTS), 'values' => []];
@@ -160,14 +164,21 @@ $formatThaiDate = static function ($value) {
   <input type="hidden" name="page" value="admin_dashboard">
   <div class="row g-3 align-items-end">
     <div class="col-lg-3 col-md-6">
-      <label for="chartStartDate" class="form-label"><i class="bi bi-calendar3 me-2" aria-hidden="true"></i>วันที่เริ่มต้น</label>
-      <input id="chartStartDate" type="date" name="start_date" class="form-control"
-             value="<?= e($trendStart) ?>" required>
+      <label for="chartMonth" class="form-label"><i class="bi bi-calendar3 me-2" aria-hidden="true"></i>เดือน</label>
+      <select id="chartMonth" name="month" class="form-select">
+        <option value="year" <?= $selectedMonth === null ? 'selected' : '' ?>>ทั้งปี</option>
+        <?php foreach ($thaiMonths as $index => $monthName): ?>
+          <option value="<?= $index + 1 ?>" <?= $selectedMonth === $index + 1 ? 'selected' : '' ?>><?= e(trim($monthName, '.')) ?></option>
+        <?php endforeach; ?>
+      </select>
     </div>
     <div class="col-lg-3 col-md-6">
-      <label for="chartEndDate" class="form-label"><i class="bi bi-calendar3 me-2" aria-hidden="true"></i>วันที่สิ้นสุด</label>
-      <input id="chartEndDate" type="date" name="end_date" class="form-control"
-             value="<?= e($trendEndDate) ?>" required>
+      <label for="chartYear" class="form-label"><i class="bi bi-calendar3 me-2" aria-hidden="true"></i>ปี</label>
+      <select id="chartYear" name="year" class="form-select">
+        <?php for ($year = $currentYear; $year >= $firstYear; $year--): ?>
+          <option value="<?= $year ?>" <?= $selectedYear === $year ? 'selected' : '' ?>><?= $year + 543 ?></option>
+        <?php endfor; ?>
+      </select>
     </div>
     <div class="col-lg-3 col-md-6">
       <button type="submit" class="btn btn-chart-filter w-100">
@@ -180,9 +191,6 @@ $formatThaiDate = static function ($value) {
       </a>
     </div>
   </div>
-  <?php if ($chartDateError !== ''): ?>
-    <div class="alert alert-danger py-2 mt-3 mb-0" role="alert"><?= e($chartDateError) ?></div>
-  <?php endif; ?>
 </form>
 
 <div class="row g-3 mb-4">
@@ -278,6 +286,44 @@ $formatThaiDate = static function ($value) {
     Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
     Chart.defaults.color = '#71818b';
 
+    const chartValueLabels = {
+      id: 'chartValueLabels',
+      afterDatasetsDraw(chart) {
+        const { ctx } = chart;
+        ctx.save();
+        ctx.font = '600 12px system-ui, -apple-system, "Segoe UI", sans-serif';
+        ctx.textBaseline = 'middle';
+
+        if (chart.config.type === 'bar') {
+          const meta = chart.getDatasetMeta(0);
+          meta.data.forEach((bar, index) => {
+            const value = Number(chart.data.datasets[0].data[index]) || 0;
+            const label = value.toLocaleString('th-TH');
+            const inside = value > 0 && bar.x - bar.base > ctx.measureText(label).width + 16;
+            ctx.textAlign = inside ? 'right' : 'left';
+            ctx.fillStyle = inside ? '#fff' : '#405565';
+            ctx.fillText(label, inside ? bar.x - 8 : bar.x + 8, bar.y);
+          });
+        } else if (chart.config.type === 'doughnut') {
+          const meta = chart.getDatasetMeta(0);
+          meta.data.forEach((arc, index) => {
+            const value = Number(chart.data.datasets[0].data[index]) || 0;
+            if (value === 0 || arc.circumference < .34) return;
+
+            const angle = arc.startAngle + arc.circumference / 2;
+            const radius = (arc.innerRadius + arc.outerRadius) / 2;
+            const x = arc.x + Math.cos(angle) * radius;
+            const y = arc.y + Math.sin(angle) * radius;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = chart.data.datasets[0].backgroundColor[index] === '#f59e0b' ? '#263746' : '#fff';
+            ctx.fillText(value.toLocaleString('th-TH'), x, y);
+          });
+        }
+
+        ctx.restore();
+      }
+    };
+
     const trendChart = new Chart(document.getElementById('trendChart'), {
       type: 'line',
       data: {
@@ -324,6 +370,7 @@ $formatThaiDate = static function ($value) {
 
     const aircraftChart = new Chart(document.getElementById('aircraftChart'), {
       type: 'bar',
+      plugins: [chartValueLabels],
       data: {
         labels: aircraftData.labels,
         datasets: [{
@@ -347,6 +394,7 @@ $formatThaiDate = static function ($value) {
         scales: {
           x: {
             beginAtZero: true,
+            grace: '14%',
             ticks: { precision: 0 },
             grid: { color: '#edf2f5' },
             border: { display: false }
@@ -361,6 +409,7 @@ $formatThaiDate = static function ($value) {
 
     const remarkChart = new Chart(document.getElementById('remarkChart'), {
       type: 'doughnut',
+      plugins: [chartValueLabels],
       data: {
         labels: remarkData.labels,
         datasets: [{
@@ -377,7 +426,19 @@ $formatThaiDate = static function ($value) {
         plugins: {
           legend: {
             position: 'bottom',
-            labels: { usePointStyle: true, pointStyle: 'circle', padding: 18, boxWidth: 8 }
+            labels: {
+              usePointStyle: true,
+              pointStyle: 'circle',
+              padding: 18,
+              boxWidth: 8,
+              generateLabels(chart) {
+                const labels = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                return labels.map((item) => {
+                  const value = chart.data.datasets[0].data[item.index] ?? 0;
+                  return { ...item, text: `${item.text} (${Number(value).toLocaleString('th-TH')})` };
+                });
+              }
+            }
           },
           tooltip: {
             callbacks: {

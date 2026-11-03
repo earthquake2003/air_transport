@@ -38,8 +38,8 @@ if (!in_array($page, $allowed, true)) {
     $page = 'air_evac_form';
 }
 
-if ($page === 'admin_dashboard' || $page === 'admin_form' || $page === 'air_evac_detail' || $page === 'air_evac_edit'
-    || ($page === 'air_evac_list' && admin_logged_in())) {
+if ($page === 'admin_dashboard' || $page === 'admin_form' || $page === 'air_evac_list'
+    || $page === 'air_evac_detail' || $page === 'air_evac_edit') {
     require_admin();
     include __DIR__ . '/includes/admin_header.php';
     if ($page === 'admin_dashboard') {

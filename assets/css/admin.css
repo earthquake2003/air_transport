@@ -343,7 +343,8 @@
 
 .admin-chart-date-filter .form-label i { color: #647d8b; }
 
-.admin-chart-date-filter .form-control {
+.admin-chart-date-filter .form-control,
+.admin-chart-date-filter .form-select {
   min-height: 56px;
   padding: .7rem .9rem;
   border: 1px solid #dfe5ec;
@@ -353,7 +354,8 @@
   font-size: 1rem;
 }
 
-.admin-chart-date-filter .form-control:focus {
+.admin-chart-date-filter .form-control:focus,
+.admin-chart-date-filter .form-select:focus {
   border-color: #5a4bd6;
   background-color: #fff;
   box-shadow: 0 0 0 .2rem rgba(67, 56, 202, .12);
@@ -755,6 +757,7 @@
 
 @media (max-width: 767.98px) {
   .admin-chart-date-filter .form-control,
+  .admin-chart-date-filter .form-select,
   .admin-chart-date-filter .btn { min-height: 48px; }
   .admin-trend-chart-body { height: 280px; }
   .patient-summary-header { align-items: flex-start; flex-wrap: wrap; padding: 1.25rem; }
