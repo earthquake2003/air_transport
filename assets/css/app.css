@@ -319,8 +319,10 @@
 #airEvacTable .patient-name { min-width: 150px; color: #263f4c; font-weight: 650; }
 #airEvacTable .mission-cell { min-width: 140px; color: #315160; font-weight: 600; }
 #airEvacTable .mission-cell small { display: block; margin-top: .15rem; color: #84949d; font-size: .75rem; font-weight: 400; }
-#airEvacTable .route-cell { min-width: 190px; white-space: nowrap; }
-#airEvacTable .route-arrow { margin: 0 .45rem; color: #0e7490; font-size: .82rem; }
+#airEvacTable .route-cell { min-width: 190px; }
+#airEvacTable .route-cell span,
+#airEvacTable .route-arrow { display: block; }
+#airEvacTable .route-arrow { margin: .15rem 0; color: #0e7490; font-size: .82rem; }
 #airEvacTable .diagnosis-cell { min-width: 180px; color: #506774; }
 #airEvacTable tbody tr:last-child td { border-bottom: 0; }
 

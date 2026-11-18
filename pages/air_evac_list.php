@@ -98,7 +98,7 @@ $rows = $stmt->fetchAll();
             <td><?= e($r['unit'] ?? '-') ?></td>
             <td class="mission-cell"><?= e($MISSIONS[$r['mission_type']] ?? '-') ?>
                 <?php if ($r['mission_name']): ?><small><?= e($r['mission_name']) ?></small><?php endif; ?></td>
-            <td class="route-cell"><span><?= e($r['origin']) ?></span><i class="route-arrow bi bi-arrow-right" aria-hidden="true"></i><span><?= e($r['destination']) ?></span></td>
+            <td class="route-cell"><span><?= e($r['origin']) ?></span><i class="route-arrow bi bi-arrow-down" aria-hidden="true"></i><span><?= e($r['destination']) ?></span></td>
             <td class="diagnosis-cell"><?= e($r['diagnosis']) ?></td>
             <td><?= e($AIRCRAFTS[$r['aircraft_type']] ?? '-') ?></td>
             <td><?= e($REMARKS[$r['remark_type']] ?? '-') ?></td>
