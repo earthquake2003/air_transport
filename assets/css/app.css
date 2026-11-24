@@ -181,7 +181,7 @@
   font-weight: 600;
 }
 
-.btn-air { background-color: #164e63; }
+.btn-air { background-color: #164e63; border-color: #164e63; color: #fff; }
 
 .air-list-card {
   overflow: hidden;

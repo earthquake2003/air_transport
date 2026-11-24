@@ -132,7 +132,7 @@ $sel = fn($k, $val) => (($old[$k] ?? '') == $val) ? 'selected' : '';
 
       <div class="col-12 d-flex flex-column-reverse flex-sm-row justify-content-sm-end gap-2 evac-actions">
         <button type="reset" class="btn btn-outline-secondary"><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>ล้างฟอร์ม</button>
-        <button type="submit" class="btn btn-primary"><i class="bi bi-check2-circle me-1" aria-hidden="true"></i>บันทึกข้อมูล</button>
+        <button type="submit" class="btn btn-air"><i class="bi bi-check2-circle me-1" aria-hidden="true"></i>บันทึกข้อมูล</button>
       </div>
     </form>
     </div>

@@ -392,6 +392,19 @@
 
 .admin-doughnut-body { height: 300px; }
 
+.admin-chart-empty {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  color: #84939c;
+  text-align: center;
+}
+
+.admin-chart-empty i { color: #afc0c9; font-size: 2rem; }
+
 .patient-summary-card {
   position: relative;
   overflow: hidden;

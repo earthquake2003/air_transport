@@ -95,7 +95,11 @@ foreach (array_keys($AIRCRAFTS) as $aircraftType) {
     $aircraftChart['values'][] = array_sum($monthlyCounts);
 }
 
-$remarkChart = ['labels' => array_values($REMARKS), 'values' => []];
+$remarkChart = [
+    'labels' => array_values($REMARKS),
+    'types' => array_keys($REMARKS),
+    'values' => [],
+];
 foreach (array_keys($REMARKS) as $remarkType) {
     $monthlyCounts = array_map(
         static fn($monthKey) => $remarkMonthlyCounts[$monthKey][$remarkType] ?? 0,
@@ -103,6 +107,7 @@ foreach (array_keys($REMARKS) as $remarkType) {
     );
     $remarkChart['values'][] = array_sum($monthlyCounts);
 }
+$remarkTotal = array_sum($remarkChart['values']);
 
 $trendChart = [
     'labels' => $trendLabels,
@@ -218,7 +223,14 @@ $formatThaiDate = static function ($value) {
         <span class="admin-chart-badge"><i class="bi bi-pie-chart me-1" aria-hidden="true"></i>โดนัท</span>
       </div>
       <div class="admin-chart-body admin-doughnut-body">
-        <canvas id="remarkChart" role="img" aria-label="กราฟโดนัทสัดส่วนประเภทหมายเหตุ"></canvas>
+        <?php if ($remarkTotal === 0): ?>
+          <div class="admin-chart-empty" role="status">
+            <i class="bi bi-inbox" aria-hidden="true"></i>
+            ไม่มีรายการในช่วงเวลาที่เลือก
+          </div>
+        <?php else: ?>
+          <canvas id="remarkChart" role="img" aria-label="กราฟโดนัทสัดส่วนประเภทหมายเหตุ"></canvas>
+        <?php endif; ?>
       </div>
     </section>
   </div>
@@ -407,50 +419,64 @@ $formatThaiDate = static function ($value) {
       }
     });
 
-    const remarkChart = new Chart(document.getElementById('remarkChart'), {
-      type: 'doughnut',
-      plugins: [chartValueLabels],
-      data: {
-        labels: remarkData.labels,
-        datasets: [{
-          data: remarkData.values,
-          backgroundColor: remarkData.labels.map((_, index) => chartPalette[index % chartPalette.length]),
-          borderColor: '#fff',
-          borderWidth: 4,
-          hoverOffset: 7
-        }]
-      },
-      options: {
-        maintainAspectRatio: false,
-        cutout: '68%',
-        plugins: {
-          legend: {
-            position: 'bottom',
-            labels: {
-              usePointStyle: true,
-              pointStyle: 'circle',
-              padding: 18,
-              boxWidth: 8,
-              generateLabels(chart) {
-                const labels = Chart.defaults.plugins.legend.labels.generateLabels(chart);
-                return labels.map((item) => {
-                  const value = chart.data.datasets[0].data[item.index] ?? 0;
-                  return { ...item, text: `${item.text} (${Number(value).toLocaleString('th-TH')})` };
-                });
+    const remarkCanvas = document.getElementById('remarkChart');
+    if (remarkCanvas) {
+      new Chart(remarkCanvas, {
+        type: 'doughnut',
+        plugins: [chartValueLabels],
+        data: {
+          labels: remarkData.labels,
+          datasets: [{
+            data: remarkData.values,
+            backgroundColor: remarkData.types.map((type, index) => {
+              if (Number(type) === 1) return '#e05b75';
+              if (Number(type) === 2) return '#f59e0b';
+              return chartPalette[index % chartPalette.length];
+            }),
+            borderColor: '#fff',
+            borderWidth: 4,
+            hoverOffset: 7
+          }]
+        },
+        options: {
+          maintainAspectRatio: false,
+          cutout: '68%',
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                usePointStyle: true,
+                pointStyle: 'circle',
+                padding: 18,
+                boxWidth: 8,
+                generateLabels(chart) {
+                  const dataset = chart.data.datasets[0];
+                  return chart.data.labels.map((label, index) => ({
+                    text: `${String(label ?? 'ไม่ระบุ')} (${Number(dataset.data[index] ?? 0).toLocaleString('th-TH')})`,
+                    fillStyle: Array.isArray(dataset.backgroundColor)
+                      ? dataset.backgroundColor[index]
+                      : dataset.backgroundColor,
+                    strokeStyle: '#fff',
+                    lineWidth: 0,
+                    hidden: !chart.getDataVisibility(index),
+                    index,
+                    pointStyle: 'circle'
+                  }));
+                }
               }
-            }
-          },
-          tooltip: {
-            callbacks: {
-              label: (context) => {
-                const total = context.dataset.data.reduce((sum, value) => sum + value, 0);
-                const percentage = total ? (context.parsed / total * 100).toFixed(1) : '0.0';
-                return ` ${context.label}: ${context.parsed.toLocaleString('th-TH')} รายการ (${percentage}%)`;
+            },
+            tooltip: {
+              callbacks: {
+                label: (context) => {
+                  const total = context.dataset.data.reduce((sum, value) => sum + value, 0);
+                  const percentage = total ? (context.parsed / total * 100).toFixed(1) : '0.0';
+                  return ` ${context.label}: ${context.parsed.toLocaleString('th-TH')} รายการ (${percentage}%)`;
+                }
               }
             }
           }
         }
-      }
-    });
+      });
+    }
   }
 </script>
